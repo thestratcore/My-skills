@@ -15,6 +15,7 @@ Skills extend an AI coding agent with reusable, domain-specific expertise. Inste
 | [marketing-campaign](marketing-campaign) | End-to-end multi-channel campaign planning: positioning, landing copy, emails, social, and ads. |
 | [market-research](market-research) | Market sizing, competitive analysis, and investor due diligence with source attribution. |
 | [academic-paper-review](academic-paper-review) | Structured review, critique, and summary of academic papers and preprints. |
+| [cv-craft](cv-craft) | Build, tailor, and maintain Markdown CVs and their variants, with evidence-based claims and a linter. |
 
 ### Presentations & diagrams
 | Skill | Description |

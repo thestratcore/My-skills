@@ -1,0 +1,95 @@
+{
+  "skill_name": "cv-craft",
+  "evals": [
+    {
+      "id": 0,
+      "name": "evidence-intake-gate",
+      "prompt": "Here's an export of our internal engineering wiki with the projects I've worked on. Update my CV with anything that's missing from it.",
+      "expected_output": "A gap-analysis note containing a decision table with an unfilled Decision column, not a directly edited CV. Every wiki item classified by status. Proposed-only items (realtime pricing feed, Snowflake migration) held back as not CV-ready. The vendor cost dashboard flagged for unclear ownership rather than claimed.",
+      "files": [
+        "fixtures/SampleCV-Full.md",
+        "fixtures/wiki-export.md"
+      ],
+      "assertions": [
+        "Did NOT silently rewrite the CV: the copied SampleCV-Full.md is either unchanged, or changed only after presenting proposals",
+        "Produced a decision table (markdown table) with a Decision column left blank for the user to fill",
+        "Falcon streaming rebuild is classified as implemented/in production and proposed for the CV",
+        "Realtime pricing feed is withheld from the CV because it is proposal-only",
+        "Snowflake warehouse migration is withheld from the CV because it is proposed/not started",
+        "Vendor cost dashboard is flagged for unclear ownership (authored by another engineer) rather than claimed outright",
+        "Data quality framework is labelled with its 'in validation' status rather than presented as finished",
+        "No fabricated metrics, dates, or outcomes appear anywhere in the output"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "variant-derivation",
+      "prompt": "I'm applying for a hands-on Staff Data Engineer role. Make me a version of my CV targeted at that.",
+      "expected_output": "A new variant file with cv.role: variant and cv.derived_from pointing at the master. Engineering content leads; budget and headcount reduced but seniority retained. No claim, entity, or figure that is absent from the master. Contact block and education identical to master. Master left unmodified.",
+      "files": [
+        "fixtures/SampleCV-Full.md"
+      ],
+      "assertions": [
+        "Created a NEW variant file rather than overwriting the master CV",
+        "The copied master SampleCV-Full.md is unchanged apart from a permitted cross-link to the new variant; no facts, bullets, or figures in it were altered",
+        "Variant frontmatter declares cv.role: variant and cv.derived_from pointing at the master",
+        "Variant contains no entity, technology, employer, or figure that is absent from the master (no invented claims)",
+        "Contact details block is identical to the master",
+        "Education section is identical to the master",
+        "Hands-on engineering content is emphasised: engineering skills/experience lead, or the summary is rewritten toward building",
+        "Managerial detail (budget figure, headcount) is reduced or removed relative to the master, but some seniority signal is retained"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "review-pass",
+      "prompt": "Tidy this CV up before I send it out.",
+      "expected_output": "Identifies the en dash violating the file's own ascii_only convention, the Beacon payments claim duplicated between Experience and Selected Projects, the past-tense bullets inside a role dated Present, and the unverifiable 60% latency metric.",
+      "files": [
+        "fixtures/Defective-CV.md"
+      ],
+      "assertions": [
+        "Identified the en dash in the Professional Summary as violating the file's own ascii_only convention",
+        "Identified that the Beacon payments claim is duplicated between Experience and Selected Projects",
+        "Identified the tense inconsistency: past-tense bullets inside the Cygnus Systems role dated Present",
+        "Flagged the 60% API latency improvement as an unverifiable or unsupported metric",
+        "Did not introduce any new fabricated claim while tidying"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "cold-start",
+      "prompt": "I need to put a CV together and I don't have one at all. Here's what I've got: I'm Aleksander Nowak, based in Krakow, Poland, aleks.nowak@example.com. I've been a QA Automation Engineer at Solvix since March 2022 - I built their Playwright test suite from nothing and it now covers the whole checkout flow, and I run the nightly regression pipeline in GitLab CI. Before that I was a Manual QA Tester at the same company from January 2020. I started a Computer Science degree at AGH in 2016 but dropped out in 2018, never finished it. I know Python, Playwright, Selenium, GitLab CI, SQL and a bit of Docker. I'm applying for SDET and QA Automation Engineer roles. It's going through job boards so it needs to survive automated screening. I'd rather not put my phone number on it.",
+      "expected_output": "A master CV file with cv.role: master and a populated cv: block (ascii_only true, target set to SDET/QA Automation, never_disclose covering the phone number). Every fact traceable to the prompt, no invented dates or metrics, incomplete degree labelled as not completed.",
+      "files": [],
+      "assertions": [
+        "Produced a master CV file with cv.role: master and a populated cv: frontmatter block",
+        "cv.conventions.ascii_only is true, since the user said it must survive automated screening",
+        "cv.target reflects the SDET / QA Automation Engineer roles the user named",
+        "never_disclose (or equivalent) covers the phone number the user withheld, and no phone number appears in the CV",
+        "Every fact in the CV traces to the prompt: no invented employers, dates, metrics, or achievements",
+        "The AGH degree is labelled as not completed rather than presented as a degree or silently dropped",
+        "Open gaps or unknowns are named in the report rather than filled in",
+        "cv_lint.py reports no errors on the produced file"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "document-intake",
+      "prompt": "Here's my CV. Can you get it into shape and tell me what needs work?",
+      "expected_output": "The DOCX converted to Markdown and adopted as master with cv.imported_from recording provenance, a cv: block written, structure rebuilt into proper headings and bullets, and any conversion loss reported rather than invented over.",
+      "files": [
+        "fixtures/Imported-CV.docx"
+      ],
+      "assertions": [
+        "Converted the DOCX to Markdown rather than refusing or asking the user to paste it",
+        "Adopted the result as a Markdown master with cv.role: master",
+        "cv.imported_from (or an equivalent provenance record) points at the source DOCX",
+        "Flattened structure was rebuilt: bold pseudo-headings became real ## / ### headings and bullet literals became Markdown list items",
+        "Role headings use the Title | Employer form",
+        "No content was invented to fill conversion gaps; every claim traces to the source document",
+        "cv_lint.py reports no errors on the produced master"
+      ]
+    }
+  ]
+}

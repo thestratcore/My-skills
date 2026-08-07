@@ -1,0 +1,4 @@
+interface:
+  display_name: "CV Craft"
+  short_description: "Build, tailor, and maintain Markdown CVs and their variants"
+  default_prompt: "Use $cv-craft to review and update this CV."
