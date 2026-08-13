@@ -48,6 +48,7 @@ Skills extend an AI coding agent with reusable, domain-specific expertise. Inste
 | [n8n-docs-assistant](n8n-docs-assistant) | Answer n8n setup, credential, node, hosting, and API questions from current n8n docs. |
 | [brainstorming](brainstorming) | Explore requirements and compare design alternatives before ambiguous feature work. |
 | [skill-creator](skill-creator) | Create, edit, optimize, and evaluate skills — including trigger tuning and benchmarking. |
+| [stratcore-skills-sync](stratcore-skills-sync) | Audit/install personal skills and explicitly commit/push MySKILLS changes without overwriting global entries. |
 
 ## Usage
 

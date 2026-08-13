@@ -16,6 +16,10 @@ Recommended recurring cycle:
 - Use tags for broad filtering, not as a replacement for semantic links.
 - Use hub/index pages for navigation across projects and technologies.
 - Use database-like review views such as Obsidian Bases when humans need recurring queue review.
+- Keep generated indexes, reports, and sections deterministic, with explicit boundaries that protect handwritten content.
+- Treat filenames as stable identifiers. Repair inbound wikilinks before completing an approved rename.
+- Detect optional tooling before use; the filesystem and `vault_audit.py` workflow remain the fallback.
+- Keep frontmatter keys stable and values predictable for Obsidian properties, Dataview/Bases-style views, and external tooling.
 
 ## RAG-oriented maintenance
 
@@ -55,6 +59,28 @@ Flag but do not delete:
 - stale project exports
 - secret-like Markdown files
 - notes with unclear status
+
+## Generated content and renames
+
+Generated content must be reproducible. Use explicit generated-section markers
+when a file also contains handwritten content, and update only the marked
+region. Do not reorder or normalize unrelated handwritten content as a side
+effect.
+
+Before an approved filename change:
+
+1. Search the vault for inbound wikilinks and Markdown links.
+2. Update every affected reference, including path-based links and embeds.
+3. Run the vault audit and confirm that the old path is no longer referenced.
+
+If the link-repair cost exceeds the value of the rename, keep the filename and
+use aliases or frontmatter instead.
+
+## Optional tooling
+
+Probe for optional tools before depending on them. If an Obsidian CLI or other
+integration is unavailable, continue with direct filesystem inspection and the
+repository's audit script. The skill has no OpenClaw dependency.
 
 ## Suggested user-facing summary
 
