@@ -13,6 +13,10 @@ Stratcore theme (brand source: the "Stratcore Design System" folder in the Obsid
 > (`pdf-generator.py`, `~/.claude-marketing/`) that is not installed. That machinery is
 > gone; this skill now assembles a JSON payload and runs the local Node generator.
 
+> Converting a Markdown document that already exists? Use the **`md-to-pdf`** skill
+> instead — same generator, same theme, no payload authoring. This skill is for
+> reports assembled from data (KPI rows, conditional tables, charts).
+
 ## Process
 
 1. **Confirm scope with the user** (ask only for what's missing):
@@ -53,3 +57,4 @@ Stratcore theme (brand source: the "Stratcore Design System" folder in the Obsid
 - The generator is a git repo; committing/pushing report *outputs* is usually unwanted
   (`out/` and `.build/` are gitignored). Commit payloads only if the user wants them kept.
 - To change the look, edit `src/report.css` in the generator, not this skill.
+  `md-to-pdf` shares that stylesheet, so a change there changes both.
