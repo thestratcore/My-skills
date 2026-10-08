@@ -69,7 +69,8 @@ publication.
 ## 8. Visual pass (brand module)
 
 - Dark-only palette; background `#0a0a0b` not `#000`; one green accent.
-- Syne display, Montserrat body, OCR-A Extended for labels / status / KPI only.
+- Syne display, Montserrat body, Kode Mono for labels / status / KPI only.
+- OCR-A Extended appears nowhere but the wordmark (it has no Czech diacritics).
 - Lucide icons; approved imagery with a scrim; correct radius / spacing / motion tokens.
 - Logo: correct lockup for the background, undistorted.
 

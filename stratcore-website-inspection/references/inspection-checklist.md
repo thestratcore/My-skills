@@ -239,8 +239,9 @@ Check the rendered page against `stratcore-brand-guidelines.md` "Colour", "Typog
 - Surfaces step by lightness (`#0f1011` → `#161719` → `#1e2022`), each with a 1px hairline
   border `rgba(255,255,255,0.08)` — the shadow supplements the hairline, never replaces it.
 - Type: **Syne** 600/700/800 for display and headings, **Montserrat** 400–700 for body /
-  UI. **OCR-A Extended** is an accent voice only — eyebrow labels, status strings, KPI
-  deltas, code-like tags. Never body copy, never headlines.
+  UI. **Kode Mono** is an accent voice only — eyebrow labels, status strings, KPI
+  deltas, code-like tags. Never body copy, never headlines. **OCR-A Extended** is the
+  wordmark font only; Czech text set in it is a finding (no `ě č ř ů ň ť ď`).
 - Radii: 8px controls, 12px cards, 16/24px larger, pill on badges.
 - Motion: 120 / 200 / 320ms, `cubic-bezier(.4,0,.2,1)`, no bounce or springy overshoot.
 - Spacing: base-8 (4, 8, 12, 16, 24, 32, 48, 64, 96). Content max-width 1200px, 24px
@@ -255,8 +256,8 @@ Check the rendered page against `stratcore-brand-guidelines.md` "Colour", "Typog
 Detect: eyedrop key colours from the screenshots; identify fonts from the snapshot's
 computed styles or visually; check imagery against the approved set.
 
-Severity: light theme / pure black / wrong accent = P2. Font-role violation (OCR-A in
-body) = P2. Imagery without scrim = P2 (also an accessibility finding, see O).
+Severity: light theme / pure black / wrong accent = P2. Font-role violation (mono in
+body) = P2. Czech text set in OCR-A Extended = P1 — glyphs are missing, not just off-brand. Imagery without scrim = P2 (also an accessibility finding, see O).
 
 ---
 
