@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Audit personal agent skills and copy healthy skills without overwriting.
+"""Audit personal agent skills and sync them across every skill root.
 
-Default mode is audit-only. Use ``--apply`` to copy healthy skill directories to
-the configured Codex and Claude skill roots.
+Default mode is audit-only: it prints the sync plan. ``--apply`` executes it.
 
-The script intentionally does not merge existing directories. If a destination
-entry already exists, the complete skill is skipped so the destination remains
-unchanged and the decision is visible in the report.
+Hub roots (MySKILLS, ~/.codex/skills, ~/.claude/skills) end up identical. Feeder
+roots (the vault's own .claude/skills and .codex/skills) only contribute skills;
+they never receive copies. When copies of a skill differ, the copy whose newest
+file is latest wins and replaces the others as a whole folder. The replaced
+folder is moved to a timestamped backup first. Equal timestamps with different
+content are reported as a tie and left alone.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ import sys
 import zipfile
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
@@ -31,6 +34,31 @@ DEFAULT_DESTINATIONS = (
     Path.home() / ".codex" / "skills",
     Path.home() / ".claude" / "skills",
 )
+DEFAULT_FEEDERS = (
+    DEFAULT_SOURCE.parent / ".claude" / "skills",
+    DEFAULT_SOURCE.parent / ".codex" / "skills",
+)
+# Folders that live in skill roots but are not skills.
+EXCLUDED_NAMES = {"synced"}
+EXCLUDED_SUFFIXES = ("-workspace",)
+IGNORED_FILES = {".DS_Store"}
+BACKUP_DIR = "_MySKILLS-zips/sync-backups"
+SECRET_PATTERNS = (
+    ("private key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+    ("API key (sk-)", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}")),
+    ("GitHub token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}")),
+    ("AWS access key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("Slack token", re.compile(r"\bxox[abpr]-[A-Za-z0-9-]{10,}")),
+    ("URL with password", re.compile(r"[a-z][a-z0-9+.-]*://[^\s:/@]+:[^\s@/<>{}$]{3,}@")),
+    (
+        "password assignment",
+        re.compile(
+            r"(?i)\b(?:password|passwd|pwd|pgpassword|secret)\b\s*[:=]\s*[\"']?"
+            r"(?![<{$*\[(]|\s|$)[^\s\"'`]{4,}"
+        ),
+    ),
+)
+SECRET_SCAN_MAX_BYTES = 1024 * 1024
 DEFAULT_COMMIT_MESSAGE = "chore(skills): sync personal skills"
 SENSITIVE_NAME_PARTS = (
     ".env",
@@ -62,7 +90,7 @@ class Entry:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Audit MySKILLS and copy healthy skills without overwriting."
+        description="Audit skill roots and sync them (missing copied, newest version wins)."
     )
     parser.add_argument(
         "--source",
@@ -75,12 +103,19 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         action="append",
         dest="destinations",
-        help="destination skill root; may be supplied more than once",
+        help="hub skill root besides --source; may be supplied more than once",
+    )
+    parser.add_argument(
+        "--feeder",
+        type=Path,
+        action="append",
+        dest="feeders",
+        help="read-only skill root that only contributes skills; may be supplied more than once",
     )
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="create destination roots and copy healthy skills; default is audit-only",
+        help="execute the sync plan; default is audit-only",
     )
     parser.add_argument(
         "--json",
@@ -133,6 +168,8 @@ def sha256_tree(root: Path) -> str:
     digest = hashlib.sha256()
     paths = sorted(root.rglob("*"), key=lambda path: path.relative_to(root).as_posix())
     for path in paths:
+        if path.name in IGNORED_FILES:
+            continue
         relative = path.relative_to(root).as_posix()
         if path.is_symlink():
             digest.update(f"L:{relative}:{os.readlink(path)}\n".encode("utf-8"))
@@ -316,49 +353,152 @@ def duplicate_groups(entries: Iterable[Entry]) -> dict[str, list[list[str]]]:
     return groups
 
 
-def occupied(path: Path) -> bool:
-    """Return true for existing paths and dangling symlinks."""
+def is_skill_candidate(path: Path) -> bool:
+    """Return true for folders that look like skills rather than workspaces or caches."""
 
-    return os.path.lexists(path)
+    name = path.name
+    if name.startswith((".", "_")) or name in EXCLUDED_NAMES or name.endswith(EXCLUDED_SUFFIXES):
+        return False
+    return path.is_dir() and not path.is_symlink() and (path / "SKILL.md").is_file()
 
 
-def copy_skills(entries: Iterable[Entry], destinations: Iterable[Path], apply: bool) -> list[dict[str, str]]:
-    actions: list[dict[str, str]] = []
-    copyable = [entry for entry in entries if entry.copyable and entry.kind == "directory"]
-    for destination in destinations:
-        if occupied(destination) and not destination.is_dir():
-            actions.append({"destination": str(destination), "status": "error", "detail": "destination root is not a directory"})
+def newest_mtime(root: Path) -> float:
+    times = [
+        path.lstat().st_mtime
+        for path in root.rglob("*")
+        if path.name not in IGNORED_FILES and not path.is_dir()
+    ]
+    return max(times, default=root.lstat().st_mtime)
+
+
+def scan_secrets(root: Path, paths: Iterable[Path] | None = None) -> list[str]:
+    """Return "relative/path:line: kind" findings for secret-looking file content."""
+
+    findings: list[str] = []
+    candidates = paths if paths is not None else root.rglob("*")
+    for path in sorted(candidates):
+        if path.name in IGNORED_FILES or path.is_symlink() or not path.is_file():
             continue
-        if apply:
-            try:
-                destination.mkdir(parents=True, exist_ok=True)
-            except OSError as exc:
-                actions.append({"destination": str(destination), "status": "error", "detail": str(exc)})
+        try:
+            if path.stat().st_size > SECRET_SCAN_MAX_BYTES:
                 continue
-        else:
-            actions.append({"destination": str(destination), "status": "would-create-root"})
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        try:
+            shown = path.relative_to(root).as_posix()
+        except ValueError:
+            shown = str(path)
+        for kind, pattern in SECRET_PATTERNS:
+            for match in pattern.finditer(text):
+                line = text.count("\n", 0, match.start()) + 1
+                findings.append(f"{shown}:{line}: {kind}")
+    return findings
 
-        for entry in copyable:
-            source = Path(entry.path)
-            target = destination / source.name
-            if occupied(target):
-                actions.append({"destination": str(target), "status": "skipped-existing"})
+
+def plan_sync(hubs: list[Path], feeders: list[Path]) -> tuple[list[dict[str, str]], dict[str, list[str]]]:
+    """Plan copies and replacements so every hub holds the newest copy of every skill."""
+
+    actions: list[dict[str, str]] = []
+    secrets: dict[str, list[str]] = {}
+    roots = [*hubs, *feeders]
+    names: set[str] = set()
+    for root in roots:
+        if root.is_dir():
+            names.update(path.name for path in root.iterdir() if is_skill_candidate(path))
+
+    for name in sorted(names, key=str.casefold):
+        copies = {root: inspect_directory(root / name) for root in roots if is_skill_candidate(root / name)}
+        healthy = {root: entry for root, entry in copies.items() if entry.healthy}
+        for entry in copies.values():
+            if not entry.healthy:
+                actions.append({
+                    "skill": name, "status": "error", "destination": entry.path,
+                    "detail": "unhealthy copy ignored: " + "; ".join(entry.issues),
+                })
+        if not healthy:
+            continue
+
+        times = {root: newest_mtime(Path(entry.path)) for root, entry in healthy.items()}
+        newest_time = max(times.values())
+        newest = [root for root, time in times.items() if time == newest_time]
+        if len({healthy[root].tree_hash for root in newest}) > 1:
+            actions.append({
+                "skill": name, "status": "tie",
+                "destination": " <-> ".join(healthy[root].path for root in newest),
+                "detail": "different content with the same newest timestamp; resolve manually",
+            })
+            continue
+        winner = healthy[newest[0]]
+        stamp = datetime.fromtimestamp(newest_time).strftime("%Y-%m-%d %H:%M:%S")
+
+        for hub in hubs:
+            target = hub / name
+            if hub in healthy and healthy[hub].tree_hash == winner.tree_hash:
                 continue
-            if not apply:
-                actions.append({"destination": str(target), "status": "would-copy"})
+            if hub in copies and not copies[hub].healthy:
+                continue  # already reported; never overwrite an unhealthy copy silently
+            if os.path.lexists(target) and hub not in copies:
+                actions.append({
+                    "skill": name, "status": "error", "destination": str(target),
+                    "detail": "target exists but is not a skill folder; resolve manually",
+                })
                 continue
-            try:
-                # dirs_exist_ok=False preserves the no-overwrite guarantee.
-                shutil.copytree(source, target, symlinks=True, dirs_exist_ok=False)
-                if sha256_tree(source) != sha256_tree(target):
-                    actions.append({"destination": str(target), "status": "error", "detail": "post-copy hash mismatch"})
-                else:
-                    actions.append({"destination": str(target), "status": "copied"})
-            except FileExistsError:
-                actions.append({"destination": str(target), "status": "skipped-existing"})
-            except OSError as exc:
-                actions.append({"destination": str(target), "status": "error", "detail": str(exc)})
-    return actions
+            actions.append({
+                "skill": name, "status": "replace" if hub in copies else "copy",
+                "source": winner.path, "destination": str(target), "detail": f"newest {stamp}",
+            })
+            if name not in secrets:
+                findings = scan_secrets(Path(winner.path))
+                if findings:
+                    secrets[name] = findings
+    return actions, secrets
+
+
+def backup_path(source: Path, target: Path, run_stamp: str) -> Path:
+    label = re.sub(r"[^A-Za-z0-9._-]+", "_", str(target.parent).strip("/"))
+    return source / BACKUP_DIR / run_stamp / label / target.name
+
+
+def apply_sync(actions: list[dict[str, str]], source: Path) -> None:
+    """Execute planned copy/replace actions, updating each action's status in place."""
+
+    run_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    for action in actions:
+        if action["status"] not in {"copy", "replace"}:
+            continue
+        origin = Path(action["source"])
+        target = Path(action["destination"])
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if action["status"] == "replace":
+                backup = backup_path(source, target, run_stamp)
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(target), str(backup))
+                action["backup"] = str(backup)
+            shutil.copytree(origin, target, symlinks=True, ignore=shutil.ignore_patterns(*IGNORED_FILES))
+            if sha256_tree(origin) != sha256_tree(target):
+                action["status"] = "error"
+                action["detail"] = "post-copy hash mismatch"
+            else:
+                action["status"] = "copied" if action["status"] == "copy" else "replaced"
+        except OSError as exc:
+            action["status"] = "error"
+            action["detail"] = str(exc)
+
+
+def verify_hubs(hubs: list[Path]) -> list[str]:
+    """Return skill names whose content is missing or differs across hubs."""
+
+    names: set[str] = set()
+    for hub in hubs:
+        if hub.is_dir():
+            names.update(path.name for path in hub.iterdir() if is_skill_candidate(path))
+    return [
+        name
+        for name in sorted(names, key=str.casefold)
+        if len({sha256_tree(hub / name) if is_skill_candidate(hub / name) else None for hub in hubs}) > 1
+    ]
 
 
 def redact_git_output(text: str) -> str:
@@ -459,6 +599,15 @@ def commit_and_push(
                 "detail": "refusing to stage sensitive-looking paths: " + ", ".join(blocked),
             }]
 
+        content_findings = scan_secrets(
+            source, [source / path for path in existing_changes if not path.startswith("_")]
+        )
+        if content_findings:
+            return [{
+                "status": "error",
+                "detail": "refusing to commit secret-looking content: " + "; ".join(content_findings),
+            }]
+
         run_git(source, ["add", "--all", "--", "."])
         staged = run_git(source, ["diff", "--cached", "--name-only"])
         if staged:
@@ -488,11 +637,15 @@ def build_report(
     entries: list[Entry],
     actions: list[dict[str, str]],
     git_actions: list[dict[str, str]],
+    feeders: list[Path] | None = None,
+    secrets: dict[str, list[str]] | None = None,
+    mismatched: list[str] | None = None,
 ) -> dict:
     duplicates = duplicate_groups(entries)
     return {
         "source": str(source),
         "destinations": [str(path) for path in destinations],
+        "feeders": [str(path) for path in feeders or []],
         "summary": {
             "entries": len(entries),
             "healthy_directories": sum(entry.copyable for entry in entries),
@@ -501,7 +654,9 @@ def build_report(
         },
         "duplicates": duplicates,
         "entries": [asdict(entry) for entry in entries],
-        "copy_actions": actions,
+        "sync_actions": actions,
+        "secret_findings": secrets or {},
+        "hub_mismatches": mismatched,
         "git_actions": git_actions,
     }
 
@@ -528,11 +683,28 @@ def print_report(report: dict) -> None:
             for group in groups:
                 print(f"  {kind}: {' <-> '.join(group)}")
 
-    if report["copy_actions"]:
-        print("Copy actions:")
-        for action in report["copy_actions"]:
+    print("Hubs: " + ", ".join([report["source"], *report["destinations"]]))
+    if report["feeders"]:
+        print("Feeders (read-only): " + ", ".join(report["feeders"]))
+    if report["sync_actions"]:
+        print("Sync actions:" if report.get("applied") else "Sync plan (audit only):")
+        for action in report["sync_actions"]:
+            origin = f" <- {action['source']}" if "source" in action else ""
             detail = f" ({action['detail']})" if "detail" in action else ""
-            print(f"  {action['status']}: {action['destination']}{detail}")
+            backup = f" [backup: {action['backup']}]" if "backup" in action else ""
+            print(f"  {action['status']}: {action['skill']} -> {action['destination']}{origin}{detail}{backup}")
+    else:
+        print("Sync plan: nothing to do; all hubs already match.")
+    if report["secret_findings"]:
+        print("Secret-looking content in skills being copied (review before committing):")
+        for name, findings in report["secret_findings"].items():
+            for finding in findings:
+                print(f"  {name}/{finding}")
+    if report["hub_mismatches"] is not None:
+        if report["hub_mismatches"]:
+            print("Verify: hubs still differ for: " + ", ".join(report["hub_mismatches"]))
+        else:
+            print("Verify: all hubs identical.")
 
     if report["git_actions"]:
         print("Git actions:")
@@ -547,13 +719,19 @@ def main() -> int:
         print("ERROR: --push requires --commit", file=sys.stderr)
         return 2
     destinations = args.destinations or list(DEFAULT_DESTINATIONS)
+    feeders = args.feeders if args.feeders is not None else list(DEFAULT_FEEDERS)
+    hubs = [args.source, *destinations]
     try:
         entries = inspect_source(args.source)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    actions = copy_skills(entries, destinations, apply=args.apply)
+    actions, secrets = plan_sync(hubs, feeders)
+    mismatched = None
+    if args.apply:
+        apply_sync(actions, args.source)
+        mismatched = verify_hubs(hubs)
     git_actions = commit_and_push(
         args.source,
         commit=args.commit,
@@ -562,14 +740,19 @@ def main() -> int:
         remote=args.remote,
         branch=args.branch,
     )
-    report = build_report(args.source, destinations, entries, actions, git_actions)
+    report = build_report(
+        args.source, destinations, entries, actions, git_actions,
+        feeders=feeders, secrets=secrets, mismatched=mismatched,
+    )
+    report["applied"] = args.apply
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
     else:
         print_report(report)
 
     has_errors = any(entry["issues"] for entry in report["entries"])
-    has_errors = has_errors or any(action["status"] == "error" for action in actions)
+    has_errors = has_errors or any(action["status"] in {"error", "tie"} for action in actions)
+    has_errors = has_errors or bool(mismatched)
     has_errors = has_errors or any(action["status"] == "error" for action in git_actions)
     has_duplicates = bool(report["duplicates"])
     if has_errors or (args.fail_on_duplicates and has_duplicates):

@@ -77,12 +77,14 @@ Use green **sparingly — one accent.** If everything is green, that is a findin
 | Heading L / M / S | Syne 700 | 24 / 20 / 17px |
 | Body L / M / S | Montserrat 400–500 | 17 / 15 / 13px |
 | Caption | Montserrat 500, uppercase, `0.08em` tracking | 12px |
-| Mono accent | OCR-A Extended, `0.04em` tracking | 13px |
+| Mono accent | Kode Mono 400–700, `0.04em` tracking | 13px |
 
 - Line height: 1.1 display, 1.25 heading, 1.6 body. Display tracking −0.01em.
-- **OCR-A Extended is an accent voice only** — eyebrow labels, status strings
+- **Kode Mono is an accent voice only** — eyebrow labels, status strings
   (`SYS.STATUS: ONLINE`), version tags, KPI deltas, code-like labels. **Never body copy,
-  never headlines.** OCR-A in a paragraph or an `h*` is a finding.
+  never headlines.** Mono in a paragraph or an `h*` is a finding.
+- **OCR-A Extended is wordmark-only.** It has no Czech diacritics (`ě č ř ů ň ť ď`), so
+  any Czech text set in it is a finding — the missing glyphs fall back to another face.
 - Headlines and buttons: **sentence case** ("Start mapping", not "Start Mapping").
   Uppercase letter-spaced text is reserved for eyebrow labels and status strings.
 
@@ -115,7 +117,9 @@ Use green **sparingly — one accent.** If everything is green, that is a findin
 
 ## Logo (dimension M)
 
-Full lockup = cube-in-hexagon mark + `STRATCORE` wordmark (wordmark in OCR-A Extended).
+Full lockup = cube-in-hexagon mark + `STRATCORE` wordmark (wordmark in OCR-A Extended —
+the one remaining use of that font; it is pure ASCII, so it is unaffected by the font's
+missing Czech glyphs).
 
 - Default: **white lockup on a dark surface.**
 - On light: black lockup on `#f5f6f5`, not pure white.

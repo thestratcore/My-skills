@@ -1,81 +1,87 @@
 ---
 name: stratcore-skills-sync
-description: Audit and install Stratcore's personal agent skills into the user's global Codex and Claude skill directories without overwriting existing entries, and explicitly commit and push MySKILLS changes to its dedicated Git repository.
+description: Sync Stratcore's personal agent skills so MySKILLS, ~/.codex/skills and ~/.claude/skills hold the same set — missing skills copied in every direction, the newest version kept when copies differ — then optionally commit and push MySKILLS to its Git repository.
 disable-model-invocation: true
 ---
 
 # Stratcore Skills Sync
 
-Use this microskill when the user asks to check, validate, install, copy, or
-sync skills from the Stratcore personal collection.
+Use this microskill when the user asks to check, sync, install, or copy skills
+between the Stratcore personal collection and the agent skill directories.
 
-The persistent implementation is the source-of-truth script:
+The implementation is:
 
 `/Users/admin/Documents/Obsidian-Stratcore/MySKILLS/sync_skills.py`
 
-## Execution
+## What it syncs
 
-Run an audit first:
+- **Hubs** — end up identical: `MySKILLS/` (source), `~/.codex/skills`,
+  `~/.claude/skills`.
+- **Feeders** — read-only, only contribute skills: the vault's own
+  `.claude/skills` and `.codex/skills`. They never receive copies.
 
-```bash
-python3 /Users/admin/Documents/Obsidian-Stratcore/MySKILLS/sync_skills.py
-```
+A folder counts as a skill only if it holds a `SKILL.md`. Folders starting with
+`_` or `.`, `synced` (Claude's sync cache) and `*-workspace` folders (eval
+workspaces) are never synced. `.DS_Store` files are ignored when comparing.
 
-Copy healthy skills only when the user explicitly requests installation or
-syncing:
+Rules:
 
-```bash
-python3 /Users/admin/Documents/Obsidian-Stratcore/MySKILLS/sync_skills.py --apply
-```
+1. A skill missing from a hub is copied there from wherever it exists.
+2. When copies differ, the copy whose newest file is latest wins and replaces
+   the others as a whole folder, so files only in older copies are removed.
+3. The replaced folder is moved first to
+   `MySKILLS/_MySKILLS-zips/sync-backups/<timestamp>/` — `~/.claude` and
+   `~/.codex` are not under git, so this is the only undo.
+4. Different content with the same newest timestamp is a **tie**: reported,
+   left alone, and must be resolved by the user.
+5. Unhealthy copies (bad frontmatter, broken symlinks) are reported and never
+   overwritten or used as a source.
 
-Commit the current `MySKILLS` repository changes explicitly:
+## Workflow
 
-```bash
-python3 /Users/admin/Documents/Obsidian-Stratcore/MySKILLS/sync_skills.py \
-  --commit --commit-message "chore(skills): sync personal skills"
-```
+Always run in this order and stop at each checkpoint.
 
-Commit and push to the configured `origin` remote explicitly:
+1. **Plan** — audit only, nothing changes:
 
-```bash
-python3 /Users/admin/Documents/Obsidian-Stratcore/MySKILLS/sync_skills.py \
-  --commit --push --commit-message "chore(skills): sync personal skills"
-```
+   ```bash
+   python3 /Users/admin/Documents/Obsidian-Stratcore/MySKILLS/sync_skills.py
+   ```
 
-Use `--remote NAME` and `--branch BRANCH` when the repository does not use
-`origin` and the checked-out branch name. `--push` requires `--commit`.
+   Summarize for the user: skills to copy (and where), skills to replace (which
+   copy wins and its date), ties, errors, and any secret-looking content in
+   skills being copied.
 
-The default destinations are:
+2. **Checkpoint** — wait for the user to confirm the plan.
 
-- `/Users/admin/.codex/skills`
-- `/Users/admin/.claude/skills`
+3. **Apply** — executes the plan and verifies all hubs are identical:
 
-## Operating rules
+   ```bash
+   python3 /Users/admin/Documents/Obsidian-Stratcore/MySKILLS/sync_skills.py --apply
+   ```
 
-1. Inspect the source collection before copying.
-2. Report duplicate skill names, duplicate `SKILL.md` content, and duplicate
-   package representations.
-3. Treat a directory as healthy only when it contains a readable `SKILL.md`
-   with valid required frontmatter and no broken symlinks.
-4. Skip unhealthy directories and `.skill` package archives. Prefer the
-   unpacked directory representation.
-5. Treat any existing destination entry as occupied. Never merge, replace,
-   delete, or overwrite it.
-6. Verify copied directory content using the script's post-copy hash check.
-7. Report errors, skipped entries, and copies explicitly.
-8. Before committing, refuse to stage paths whose names look like credentials
-   or secrets. Resolve those files manually before retrying.
-9. Stage all changes in the `MySKILLS` repository only when `--commit` is
-   present. Push only when `--push` is also present.
+   Report what was copied, replaced (with backup paths), and the verify line.
 
-Use `--json` when a machine-readable report is required. Use repeated
-`--destination PATH` arguments only when the user explicitly supplies
-alternative destination roots.
+4. **Commit and push** — only when the user asks:
 
-The script is audit-only unless `--apply`, `--commit`, or `--push` is present.
-Do not add any mutating flag implicitly. A normal sync-and-publish run is:
+   ```bash
+   python3 /Users/admin/Documents/Obsidian-Stratcore/MySKILLS/sync_skills.py \
+     --commit --push --commit-message "chore(skills): sync personal skills"
+   ```
 
-```bash
-python3 /Users/admin/Documents/Obsidian-Stratcore/MySKILLS/sync_skills.py \
-  --apply --commit --push
-```
+   The commit is refused if a changed path has a sensitive-looking name or a
+   changed file contains secret-looking content (private keys, API tokens,
+   passwords, URLs with credentials). Show the findings to the user; do not
+   edit or bypass them yourself.
+
+After a sync that adds skills, offer to update the skill tables in
+`MySKILLS/README.md`.
+
+## Options
+
+- `--json` — machine-readable report.
+- `--destination PATH` (repeatable) — replaces the default non-source hubs.
+- `--feeder PATH` (repeatable) — replaces the default feeders.
+- `--remote NAME`, `--branch BRANCH` — for non-default Git setups. `--push`
+  requires `--commit`.
+
+Never add `--apply`, `--commit`, or `--push` without the user's go-ahead.
