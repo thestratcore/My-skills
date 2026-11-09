@@ -1,0 +1,14 @@
+.git
+.DS_Store
+node_modules
+dist
+.next
+coverage
+test-results
+playwright-report
+*.log
+.env
+.env.*
+.releases
+__pycache__
+*.pyc

@@ -1,66 +1,47 @@
-# Dependency-maintenance troubleshooting
+# Troubleshooting
 
-Apply only the branch matching observed evidence. Commands are examples; use the actual
-package manager and project paths. Record exit codes and sanitized errors, not credentials.
+Use only the section that matches what you observed. Record exit codes and sanitized errors, never credentials.
+Keep fixes that worked separate from attempts that didn't when you write the upgrade record.
 
-## Network restrictions
+## `npm ci` fails
 
-Distinguish sandbox DNS/access failures from unavailable upstream services. Test endpoints
-separately with bounded timeouts; for example `curl --connect-timeout 10 --max-time 20 -I
-https://registry.npmjs.org/`. An npm query timing out is not evidence that no update exists.
-Use supported permission escalation when authorized. If it is rejected, report the exact
-rejection and smallest required owner action; do not bypass the restriction.
+- **"package.json and package-lock.json are not in sync":** someone edited `package.json` by hand. In the worktree, run `npm install` (without flags) once, check that the lockfile diff only touches the intended packages, and commit it as part of the group.
+- **`EBADENGINE`:** a package needs a newer Node than the local or `engines` version. Either the package needs a Mode C first, or pick an older version. Don't use `--engine-strict=false` to hide it.
+- **Lifecycle script failure (`postinstall`, `prepare`):** read the script before re-running it. Never let an install script reach a real database or service.
 
-Production builds may fetch fonts or other assets. Retry with supported network access before
-changing application assets. Do not silently change typography or disable TLS verification.
-Official browser-accessible advisories can support research, but do not substitute for a
-successful installation/build when those remain blocked.
+## Peer conflicts (`ERESOLVE`) and resolver crashes
 
-## Git metadata and Docker socket restrictions
+- Read the conflict tree, then upgrade the coupled packages together (see policy.md). Usually one plugin lags behind. Defer that major, or upgrade the plugin too.
+- Never use `--force` or `--legacy-peer-deps`.
+- npm `Cannot read properties of null (reading 'edgesOut')` is a resolver bug, not an incompatibility. Reproduce it with a clean `npm ci`. If it persists, test a newer npm through a project-scoped `npx npm@<version> install`, and record whether the lockfile format changed. Never change the global npm installation.
+- If it stays unresolved, keep the last commit that works, defer the group with the evidence, and continue with the independent groups.
 
-A denied `.git/index.lock` or branch-ref write can come from sandbox access, not ownership.
-Use supported escalation where available. Inspect actual locks before considering removal;
-do not remove another process's lock. Avoid sudo, recursive ownership/permission changes,
-socket chmod or hook bypasses as shortcuts.
+## Network
 
-Docker client availability does not prove daemon access. Check daemon/context with supported
-access and confirm it is the intended local test environment before mutations. Never switch
-to a production daemon to get around a local socket denial.
+- Test the endpoint directly with a bounded timeout: `curl --connect-timeout 10 --max-time 20 -I https://registry.npmjs.org/`. A timeout means "unknown", not "no updates".
+- `next/font/google` and other build-time downloads fail without network. Retry with network access, and don't swap fonts or disable TLS verification to get past it.
+- The survey marks registry and audit failures as data gaps. Re-run it later; don't infer "up to date".
+
+## Docker builds
+
+- The Mac is arm64 and the VPS is amd64. `--platform linux/amd64` builds and smoke tests run under emulation, so they're slow (minutes), but slow is not a failure. Watch the build log instead of starting a second build.
+- **Native module compiles during `npm ci` in Alpine:** there's no prebuilt binary for musl or the new Node ABI. Pick a package version that ships one, or defer the Node bump.
+- **"Docker daemon not running":** start Docker Desktop (`open -a Docker`). Never point the Docker context at the VPS to work around a local problem.
+- Clean up only the containers and images you created (`docker rm -f <name>`, `docker rmi <tag>`).
+
+## Playwright
+
+- **"Executable doesn't exist" or a browser version mismatch:** run `npx playwright install chromium` (or the configured browsers) after every `@playwright/test` bump.
+- **Screenshot diffs:** report them with the diff images. Changing baselines needs the owner's approval.
+- **Flaky timeouts after an upgrade:** re-run once. A test that fails twice the same way is a regression.
 
 ## Slow or apparently stalled commands
 
-Poll the existing session; inspect elapsed time, process activity and relevant log tails.
-Do not run competing installs in one worktree. If a command has stopped making progress,
-terminate only the process you own, inspect manifest/lockfile state and retry with a bounded,
-diagnostic command. ARM-host AMD64 emulation may be slow; elapsed time alone is not failure.
+- Check elapsed time, CPU usage and the log tail before deciding a command is stuck. Never run two installs in the same worktree.
+- If it really is stuck, stop only your own process, check the manifest and lockfile state, and retry once with `--loglevel verbose` and a timeout.
 
-## Resolver crashes and peer conflicts
+## When running in a sandbox (Codex and similar)
 
-Capture Node/package-manager versions, stack trace and affected dependency graph. For npm,
-`Cannot read properties of null (reading 'edgesOut')` is a resolver failure, not proof that
-an application upgrade is incompatible. Inspect peer ranges and update coupled packages
-together. Reproduce with the current manifest/lockfile in a clean isolated install before
-changing resolution strategy. Preserve evidence before removing disposable installation output.
-
-When justified, test a compatible package-manager version with a project-scoped invocation;
-record its version and effect on lockfile format. Do not change the global installation or
-silently bypass conflicts with force/legacy-peer flags. If unresolved, retain the last coherent
-candidate, defer the affected group explicitly and verify independent updates.
-
-## Useful npm examples
-
-Use only for npm projects and adapt available scripts:
-
-```sh
-node --version
-npm --version
-npm outdated --json
-npm audit --json
-npm audit --omit=dev --json
-npm ci
-```
-
-Outdated/audit commands can exit nonzero because findings exist; inspect their structured output
-and distinguish findings from access/tool failures. pnpm/Yarn audit features and flags vary by
-version: inspect installed CLI help and official documentation rather than copying npm flags.
-Private registries may provide incomplete advisory coverage; disclose this limit.
+- A denied write to `.git/index.lock` or a branch ref usually comes from the sandbox, not file ownership. Request the supported escalation. Never delete a lock another process holds, and never use sudo, `chown -R` or `chmod` on sockets.
+- **Sandbox DNS failures:** request network permission. If that's refused, report the exact rejection and the smallest action the owner needs to take.
+- Having the Docker client doesn't mean you can reach the daemon. Confirm the context is the local Docker Desktop before running anything.

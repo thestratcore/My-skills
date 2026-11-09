@@ -1,0 +1,16 @@
+{
+  "schema": 2,
+  "project": "fixture-node",
+  "source": "https://github.com/thestratcore/fixture-node",
+  "mode": "production",
+  "deployDir": "/opt/fixture-node",
+  "envFiles": [".env.production"],
+  "checks": [["python3", "-m", "unittest", "discover", "-s", "ops", "-p", "test_release.py"]],
+  "images": {"app": {"repository": "ghcr.io/thestratcore/fixture-node"}},
+  "services": {
+    "fixture-node-app": {"role": "app", "image": "app", "container": "fixture-node-app", "port": {"host": 13010, "container": 3000}, "mounts": [{"type": "volume", "target": "/data"}]},
+    "fixture-node-worker": {"role": "worker", "image": "app", "container": "fixture-node-worker", "mounts": [{"type": "volume", "target": "/data"}]},
+    "fixture-node-migrate": {"role": "job", "image": "app", "profile": "migrate"}
+  },
+  "smoke": {"service": "fixture-node-app", "paths": ["/healthz", "/"], "runJobs": true, "env": {"DATABASE_URL": "postgres://smoke@none/smoke"}}
+}

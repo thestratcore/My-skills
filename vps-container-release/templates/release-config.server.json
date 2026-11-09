@@ -1,0 +1,38 @@
+{
+  "schema": 2,
+  "project": "PROJECT",
+  "source": "https://github.com/thestratcore/REPO",
+  "mode": "production",
+  "productionHostname": "n8n",
+  "deployDir": "/opt/PROJECT",
+  "envFiles": [".env.production"],
+  "composeFile": "ops/compose.production.yml",
+  "checks": [
+    ["python3", "-m", "unittest", "discover", "-s", "ops", "-p", "test_release.py"],
+    ["npm", "ci", "--no-audit", "--no-fund"],
+    ["npm", "test"]
+  ],
+  "images": {
+    "app": {"repository": "ghcr.io/thestratcore/PROJECT", "dockerfile": "Dockerfile", "target": null, "buildMetadata": false}
+  },
+  "services": {
+    "PROJECT-app": {"role": "app", "image": "app", "container": "PROJECT-app", "port": {"host": 3010, "container": 3000}, "mounts": []},
+    "PROJECT-worker": {"role": "worker", "image": "app", "container": "PROJECT-worker", "mounts": [{"type": "volume", "target": "/data"}]},
+    "PROJECT-migrate": {"role": "job", "image": "app", "profile": "migrate"}
+  },
+  "smoke": {
+    "service": "PROJECT-app",
+    "paths": ["/healthz"],
+    "runJobs": true,
+    "env": {"DATABASE_URL": "postgres://smoke:smoke@smoke-db:5432/smoke", "OUTBOUND_DISABLED": "1"},
+    "extraServices": {
+      "smoke-db": {
+        "image": "postgres:17-alpine",
+        "environment": {"POSTGRES_USER": "smoke", "POSTGRES_PASSWORD": "smoke", "POSTGRES_DB": "smoke"},
+        "networks": ["client-db-net"],
+        "healthcheck": {"test": ["CMD", "pg_isready", "-U", "smoke"], "interval": "2s", "retries": 20}
+      }
+    }
+  },
+  "legacyEnvironment": {}
+}
