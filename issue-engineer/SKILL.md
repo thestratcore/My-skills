@@ -1,13 +1,30 @@
 ---
 name: issue-engineer
-description: Autonomously triage, investigate, design, implement, and verify a Git repository issue on a dedicated local branch, with local commits and the issue as the engineering audit trail. Use when asked to resolve an issue end-to-end.
+description: Autonomously triage, investigate, design, implement, and verify a Git repository issue on a dedicated local branch, with local commits and the issue as the engineering audit trail. Use when asked to resolve an issue end-to-end, or when the user says to use/start issue-engineer without naming an issue — it then lists the current project's open issues and asks which one to work on.
 ---
 
 # Issue Engineer — autonomous issue-to-commit workflow
 
 ## Invocation contract
 
-Input: an issue number or URL, optionally a repository identifier. If no issue is supplied, ask for its identifier; never arbitrarily select an issue. Operate from the current repository unless the user explicitly identifies another. Find the issue using available authenticated issue tools; for GitHub, prefer `gh` CLI when available. If issue access or comment permission is unavailable, continue only where the requirements can be reliably obtained; clearly report missing audit updates. Never invent issue content or claim an action succeeded without verifying it.
+Input: an issue number or URL, optionally a repository identifier. Operate from the current repository unless the user explicitly identifies another.
+
+### Issue discovery (no issue supplied)
+
+When the skill is started without an issue identifier (e.g. "use/start the skill", "work on an issue"), discover open issues in the current project and let the user choose. Discovery is read-only.
+
+1. Confirm the working directory is inside a Git repository (`git rev-parse --show-toplevel`) and identify the issue host from the remotes (`git remote -v`). If there is no repository or no remote, say so and ask for an issue URL; stop.
+2. For GitHub, resolve the repository with `gh repo view --json nameWithOwner,url`, then list open issues:
+   `gh issue list --state open --limit 50 --json number,title,labels,assignees,updatedAt,url`
+   For other hosts use the equivalent authenticated tool (e.g. `glab issue list`). If the CLI is missing or unauthenticated, report the exact error and ask for an issue identifier; do not guess.
+3. Show the issues as a compact table, newest-updated first: number, title, labels, assignee, last updated. Note when the list was truncated at 50.
+4. Ask the user to pick one issue (AskUserQuestion when available and four or fewer issues; otherwise ask in plain text for the number). Do not start work until the user picks. Never select an issue yourself, not even when only one is open.
+5. If there are no open issues, say so and stop.
+6. Once chosen, continue with step 0 of the workflow using that issue.
+
+### Issue access
+
+Find the issue using available authenticated issue tools; for GitHub, prefer `gh` CLI when available. If issue access or comment permission is unavailable, continue only where the requirements can be reliably obtained; clearly report missing audit updates. Never invent issue content or claim an action succeeded without verifying it.
 
 Goal: produce the smallest maintainable, tested solution justified by the issue and repository. Complete the work without approval checkpoints for routine investigation, editing, testing, and local commits. Do not push, open a PR, merge, deploy, close the issue, modify issue labels or status, or access production systems unless a separate explicit instruction authorizes those operations.
 

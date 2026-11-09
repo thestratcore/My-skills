@@ -58,7 +58,9 @@ Deploys:
 - **Silvaros NLI**: CI/CD — `git push` to `main` of `thestratcore/Silvaros-React-NLI`; GitHub Actions SSHes
   as `deploy` and runs `cd /opt/silvaros && git pull --ff-only && APP_VERSION=$(git rev-parse --short HEAD) docker compose up -d --build`.
   Apply migrations before restart. Never rsync over `/opt/silvaros`.
-- **DrezuraTop**: `cd /opt/drezuratop && git pull && docker compose up -d --build` (run within an authorized deployment task).
+- **DrezuraTop, MarcelKocian, and any app onboarded to image releases**: use the `vps-container-release` skill
+  (local build → private GHCR → digest-pinned Compose, owner approval). Never `git pull`/build on the VPS for these;
+  `/opt/drezuratop` is a legacy checkout. Port registry and release paths: that skill's `references/vps-facts.md`.
 - Authelia: only DrezuraTop uses the `authelia_gate` snippet; users in `/opt/authelia/private/users.yml`
   (Argon2id digests). Shared login username `drezura-visitor`; password is not stored in the vault.
 

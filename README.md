@@ -31,6 +31,7 @@ Skills extend an AI coding agent with reusable, domain-specific expertise. Inste
 | Skill | Description |
 |-------|-------------|
 | [draft-nda](draft-nda) | Draft a detailed NDA covering information types, jurisdiction, and clauses needing legal review. |
+| [legal-cz-project](legal-cz-project) | Czech-law legal assistant: analysis, contract review, version comparison with redlines, and drafting of contracts and letters, with `[DOPLNIT]`/`[OVĚŘIT]`/`[VOLBA]` markers for open items. |
 | [legal-response](legal-response) | Templated responses to common legal inquiries, with escalation checks. |
 | [review-contract](review-contract) | Review a contract against a negotiation playbook: flag deviations, redline, assess business impact. |
 
