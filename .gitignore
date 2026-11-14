@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 stratcore-design/
 _MySKILLS-zips/
+
+# Sensitive: VPS host, root access, internal service layout
+connect-to-vps/
+vps-container-release/

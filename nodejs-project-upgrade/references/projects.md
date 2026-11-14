@@ -107,13 +107,12 @@ All six use **npm** with `package-lock.json`. Every upgrade runs from a worktree
 ## Not registered
 
 `survey.py --all` also lists the other Node repos and marks them "unregistered":
-- DrezuraTop-Capacitor (no git repository)
-- REA-typescript
-- StinnDenik-Appsmith
+- REA-typescript (third-party clone of `morluto/rea`: update with `git pull --ff-only`, never patch locally)
 - LinkedInMCP-server (pnpm)
-- StratcoreReport-html
+- StratcoreReport-html (dormant: advisories acknowledged 2026-11-10; patch the `puppeteer-core` major before relying on md-to-pdf/pdf-report)
 - weathercloud-headless
-- LangChain_test
-- the nested apps (RetoolSmlouvy, KnihaJizd web, InstagramAgent frontend, ClaudeFlow driver)
+- the nested apps (RetoolSmlouvy, dormant since 2026-11-10; InstagramAgent frontend)
+
+Retired projects live in `CodeProjects/Archive/` and are not surveyed (KnihaJizd, StinnDenik, ClaudeFlow, LangChain_test and others, 2026-11-10).
 
 To register one, add it here and to `PROJECTS`, with its own verify commands.

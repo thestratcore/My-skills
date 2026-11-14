@@ -84,7 +84,6 @@ Skills extend an AI coding agent with reusable, domain-specific expertise. Inste
 | [powerbi-modeling](powerbi-modeling) | Design optimized Power BI semantic models: star schemas, DAX measures, relationships, RLS. |
 | [m-query](m-query) | Power Query M conventions for pbiflow models. |
 | [jira-expert](jira-expert) | Jira projects, JQL, workflows, custom fields, automation, and reporting. |
-| [connect-to-vps](connect-to-vps) | Context for connecting to and working on the Stratcore Hetzner VPS. |
 
 ### Knowledge & workflow ops
 | Skill | Description |
